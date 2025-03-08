@@ -6,8 +6,8 @@ blueprint:
   domain: automation
   input:
     control_device:
-      name: Lutron Aurora Dimmer Switch
-      description: Lutron Aurora Z3-1BRL
+      name: Control Dimmer
+      description: Select the dimmer input to control the lights.
       selector:
         device:
           integration: zha
