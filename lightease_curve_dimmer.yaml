@@ -10,7 +10,11 @@ blueprint:
       description: Select the dimmer input to control the lights.
       selector:
         entity:
-          domain: sensor
+          domain:
+            - sensor
+            - light
+            - switch
+            - number
 
     lights:
       name: Lights to Control
