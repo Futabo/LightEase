@@ -1,0 +1,52 @@
+blueprint:
+  name: Dimmer Control with Custom Bézier Curves
+  description: "Control multiple lights with a dimmer, each using a custom cubic Bézier curve for brightness control."
+  domain: automation
+  input:
+    control_device:
+      name: Control Device
+      description: "The dimmer input device."
+      selector:
+        entity:
+          domain: input_number
+    controlled_lights:
+      name: Controlled Lights
+      description: "List of lights to be controlled. Each light has its own cubic Bézier curve."
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    light_curves:
+      name: Light Curves
+      description: "Cubic Bézier curve for each light. Should be a list matching the controlled lights. Format: [[x1,y1,x2,y2], ...]"
+      selector:
+        object:
+
+mode: restart
+
+variables:
+  control_value: "{{ states(input.control_device) | float }}"
+  curves: "{{ input.light_curves }}"
+  lights: "{{ input.controlled_lights }}"
+
+trigger:
+  - platform: state
+    entity_id: !input control_device
+
+action:
+  - repeat:
+      count: "{{ lights | length }}"
+      sequence:
+        - variables:
+            light_index: "{{ repeat.index - 1 }}"
+            light_entity: "{{ lights[light_index] }}"
+            bezier_curve: "{{ curves[light_index] }}"
+        - service: light.turn_on
+          target:
+            entity_id: "{{ light_entity }}"
+          data:
+            brightness_pct: >-
+              {% set x1, y1, x2, y2 = bezier_curve %}
+              {% set t = control_value / 100 %}
+              {% set bezier_brightness = (3*(1-t)*(1-t)*t*y1 + 3*(1-t)*t*t*y2 + t*t*t) * 100 %}
+              {{ bezier_brightness | int }}
