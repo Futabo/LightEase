@@ -5,7 +5,7 @@ blueprint:
     Each light follows its own Bézier curve for smooth, customized dimming.
   domain: automation
   input:
-    remote:
+    control_device:
       name: Lutron Aurora Dimmer Switch
       description: Lutron Aurora Z3-1BRL
       selector:
