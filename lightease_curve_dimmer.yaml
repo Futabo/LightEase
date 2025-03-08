@@ -55,5 +55,6 @@ action:
             brightness_pct: >-
               {% set x1, y1, x2, y2 = bezier_curve %}
               {% set t = control_value / 100 %}
-              {% set bezier_brightness = (3*(1-t)*(1-t)*t*y1 + 3*(1-t)*t*t*y2 + t*t*t) * 100 %}
+              {% set bezier_brightness = ((3*(1-t)*(1-t)*t*y1 + 3*(1-t)*t*t*y2 + t*t*t) * 100) | int %}
+              {% if bezier_brightness < 1 %}{% set bezier_brightness = 1 %}{% endif %}
               {{ bezier_brightness | int }}
