@@ -28,13 +28,13 @@ mode: restart
 
 variables:
   control_value: >-
-    {% if 'light.' in input.control_device %}
-      {{ (state_attr(input.control_device, 'brightness') | float(default=0) / 255) * 100 }}
+    {% if 'light.' in '!input control_device' %}
+      {{ (state_attr('!input control_device', 'brightness') | float(default=0) / 255) * 100 }}
     {% else %}
-      {{ states(input.control_device) | float(default=0) }}
+      {{ states('!input control_device') | float(default=0) }}
     {% endif %}
-  curves: "{{ input.light_curves }}"
-  lights: "{{ input.controlled_lights }}"
+  curves: !input light_curves
+  lights: !input controlled_lights
 
 trigger:
   - platform: state
