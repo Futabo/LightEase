@@ -48,6 +48,13 @@ action:
             light_index: "{{ repeat.index - 1 }}"
             light_entity: "{{ lights[light_index] }}"
             bezier_curve: "{{ curves[light_index] }}"
+        - service: persistent_notification.create
+          data:
+            title: "LightEase Debug"
+            message: >-
+              Light: {{ light_entity }}
+              Bézier Curve: {{ bezier_curve }}
+              Control Value: {{ control_value }}
         - service: light.turn_on
           target:
             entity_id: "{{ light_entity }}"
