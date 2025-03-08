@@ -1,31 +1,38 @@
 blueprint:
-  name: Dimmer Control with Custom Bézier Curves
-  description: "Control multiple lights with a dimmer, each using a custom cubic Bézier curve for brightness control."
+  name: LightEase Dimmer Control
+  description: "Control multiple lights with a dimmer, each using a custom curve."
   domain: automation
   input:
     control_device:
       name: Control Device
-      description: "The dimmer input device."
+      description: "The dimmer device (Lutron, Zigbee, etc.). Select a light or sensor."
       selector:
         entity:
-          domain: input_number
+          domain:
+            - light
+            - sensor
     controlled_lights:
       name: Controlled Lights
-      description: "List of lights to be controlled. Each light has its own cubic Bézier curve."
+      description: "Lights to be controlled, each with its own curve."
       selector:
         entity:
           domain: light
           multiple: true
     light_curves:
       name: Light Curves
-      description: "Cubic Bézier curve for each light. Should be a list matching the controlled lights. Format: [[x1,y1,x2,y2], ...]"
+      description: "Bézier curve for each light. Format: [[x1,y1,x2,y2], ...]"
       selector:
         object:
 
 mode: restart
 
 variables:
-  control_value: "{{ states(input.control_device) | float }}"
+  control_value: >-
+    {% if 'light.' in input.control_device %}
+      {{ (state_attr(input.control_device, 'brightness') | float(default=0) / 255) * 100 }}
+    {% else %}
+      {{ states(input.control_device) | float(default=0) }}
+    {% endif %}
   curves: "{{ input.light_curves }}"
   lights: "{{ input.controlled_lights }}"
 
