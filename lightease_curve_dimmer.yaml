@@ -10,7 +10,7 @@ blueprint:
       description: Select the dimmer input to control the lights.
       selector:
         entity:
-          domain: input_number
+          domain: sensor
 
     lights:
       name: Lights to Control
@@ -35,7 +35,13 @@ trigger:
     entity_id: !input control_device
 
 variables:
-  control_value: "{{ states[trigger.entity_id].state | float }}"
+  raw_control_value: "{{ states(trigger.entity_id) }}"
+  control_value: >-
+    {% if raw_control_value | is_number %}
+      {{ raw_control_value | float }}
+    {% else %}
+      0
+    {% endif %}
   lights: !input lights
   curves: !input curves
 
