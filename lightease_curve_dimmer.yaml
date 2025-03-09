@@ -1,55 +1,37 @@
 blueprint:
-  name: LightEase Dimmer Control
-  description: >
-    Controls multiple dimmable lights using a single dimmer input.
-    Each light follows its own Bézier curve for smooth, customized dimming.
+  name: Dimmer Control with Custom Bézier Curves
+  description: "Control multiple lights with a dimmer, each using a custom cubic Bézier curve for brightness control."
   domain: automation
   input:
     control_device:
-      name: Lutron Aurora Dimmer Switch
-      description: Lutron Aurora Z3-1BRL
+      name: Control Device
+      description: "The dimmer input device."
       selector:
-        device:
-          integration: zha
-          manufacturer: Lutron
-          model: Z3-1BRL
-          entity:
-            domain: sensor
-            device_class: battery
-
-
-    lights:
-      name: Lights to Control
-      description: Select the lights to be controlled.
+        entity:
+          domain: input_number
+    controlled_lights:
+      name: Controlled Lights
+      description: "List of lights to be controlled. Each light has its own cubic Bézier curve."
       selector:
         entity:
           domain: light
           multiple: true
-
-    curves:
-      name: Bézier Curves
-      description: >
-        Define Bézier curves for each light. Format: 
-        [[x1, y1, x2, y2], ...] 
+    light_curves:
+      name: Light Curves
+      description: "Cubic Bézier curve for each light. Should be a list matching the controlled lights. Format: [[x1,y1,x2,y2], ...]"
       selector:
         object:
 
 mode: restart
 
+variables:
+  control_value: "{{ states(input.control_device) | float }}"
+  curves: "{{ input.light_curves }}"
+  lights: "{{ input.controlled_lights }}"
+
 trigger:
   - platform: state
     entity_id: !input control_device
-
-variables:
-  raw_control_value: "{{ states(trigger.entity_id) }}"
-  control_value: >-
-    {% if raw_control_value | is_number %}
-      {{ raw_control_value | float }}
-    {% else %}
-      0
-    {% endif %}
-  lights: !input lights
-  curves: !input curves
 
 action:
   - repeat:
@@ -59,17 +41,6 @@ action:
             light_index: "{{ repeat.index - 1 }}"
             light_entity: "{{ lights[light_index] }}"
             bezier_curve: "{{ curves[light_index] }}"
-
-        # 📝 Log values in Developer Tools > Logbook
-        - service: system_log.write
-          data:
-            level: debug
-            message: >-
-              Light: {{ light_entity }},
-              Bézier Curve: {{ bezier_curve }},
-              Control Value: {{ control_value }}
-
-        # 🔆 Calculate brightness based on Bézier curve
         - service: light.turn_on
           target:
             entity_id: "{{ light_entity }}"
@@ -77,6 +48,5 @@ action:
             brightness_pct: >-
               {% set x1, y1, x2, y2 = bezier_curve %}
               {% set t = control_value / 100 %}
-              {% set bezier_brightness = ((3*(1-t)*(1-t)*t*y1 + 3*(1-t)*t*t*y2 + t*t*t) * 100) | int %}
-              {% if bezier_brightness < 1 %}{% set bezier_brightness = 1 %}{% endif %}
-              {{ bezier_brightness }}
+              {% set bezier_brightness = (3*(1-t)*(1-t)*t*y1 + 3*(1-t)*t*t*y2 + t*t*t) * 100 %}
+              {{ bezier_brightness | int }}
