@@ -1,6 +1,6 @@
 blueprint:
-  name: Dimmer Control with Custom Bézier Curves
-  description: "Control multiple lights with a dimmer, each using a custom cubic Bézier curve for brightness control."
+  name: LightEase - Bezier Curve Control
+  description: "Control dimmable lights using a Bezier curve with a dimmer input."
   domain: automation
   input:
     control_device:
@@ -9,44 +9,113 @@ blueprint:
       selector:
         entity:
           domain: input_number
+
     controlled_lights:
-      name: Controlled Lights
-      description: "List of lights to be controlled. Each light has its own cubic Bézier curve."
+      name: Lights to Control
+      description: Select the lights to adjust based on the Bezier curve.
       selector:
         entity:
           domain: light
           multiple: true
-    light_curves:
-      name: Light Curves
-      description: "Cubic Bézier curve for each light. Should be a list matching the controlled lights. Format: [[x1,y1,x2,y2], ...]"
+
+    bezier_preset:
+      name: Bezier Curve Preset
+      description: Select a preset curve or choose "Custom" to define your own.
       selector:
-        object:
+        select:
+          options:
+            - "Ease In"
+            - "Ease Out"
+            - "Ease In-Out"
+            - "Linear"
+            - "Custom"
+
+    bezier_x1:
+      name: Bezier X1 (Control Point 1)
+      description: Adjust the X1 value (0-1).
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+
+    bezier_y1:
+      name: Bezier Y1 (Control Point 1)
+      description: Adjust the Y1 value (0-1).
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+
+    bezier_x2:
+      name: Bezier X2 (Control Point 2)
+      description: Adjust the X2 value (0-1).
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+
+    bezier_y2:
+      name: Bezier Y2 (Control Point 2)
+      description: Adjust the Y2 value (0-1).
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: slider
+
+    custom_bezier:
+      name: Custom Bezier Curve (Advanced)
+      description: Enter a custom bezier curve in the format [x1, y1, x2, y2].
+      default: "[0.42, 0, 0.58, 1]"
+      selector:
+        text:
+          multiline: false
 
 mode: restart
-
-variables:
-  control_value: "{{ states(input.control_device) | float }}"
-  curves: "{{ input.light_curves }}"
-  lights: "{{ input.controlled_lights }}"
+max_exceeded: silent
 
 trigger:
   - platform: state
     entity_id: !input control_device
 
 action:
+  - variables:
+      brightness_input: "{{ states[trigger.entity_id].state | float(0) }}"
+      bezier_values: >
+        {% if is_state('input_bezier_preset', 'Ease In') %}
+          [0.42, 0, 1, 1]
+        {% elif is_state('input_bezier_preset', 'Ease Out') %}
+          [0, 0, 0.58, 1]
+        {% elif is_state('input_bezier_preset', 'Ease In-Out') %}
+          [0.42, 0, 0.58, 1]
+        {% elif is_state('input_bezier_preset', 'Linear') %}
+          [0, 0, 1, 1]
+        {% else %}
+          {{ input_custom_bezier | from_json }}
+        {% endif %}
+      x1: "{{ bezier_values[0] | float(0) }}"
+      y1: "{{ bezier_values[1] | float(0) }}"
+      x2: "{{ bezier_values[2] | float(0) }}"
+      y2: "{{ bezier_values[3] | float(0) }}"
+
+  - service: logbook.log
+    data:
+      name: "Bezier Curve Debug"
+      message: "Bezier applied with control points [{{ x1 }}, {{ y1 }}, {{ x2 }}, {{ y2 }}] and input brightness {{ brightness_input }}."
+
   - repeat:
-      count: "{{ lights | length }}"
+      for_each: !input controlled_lights
       sequence:
-        - variables:
-            light_index: "{{ repeat.index - 1 }}"
-            light_entity: "{{ lights[light_index] }}"
-            bezier_curve: "{{ curves[light_index] }}"
         - service: light.turn_on
           target:
-            entity_id: "{{ light_entity }}"
+            entity_id: "{{ repeat.item }}"
           data:
-            brightness_pct: >-
-              {% set x1, y1, x2, y2 = bezier_curve %}
-              {% set t = control_value / 100 %}
-              {% set bezier_brightness = (3*(1-t)*(1-t)*t*y1 + 3*(1-t)*t*t*y2 + t*t*t) * 100 %}
-              {{ bezier_brightness | int }}
+            brightness_pct: >
+              {{ ((1 - ((1 - brightness_input / 100) ** 3)) * 100) | int }}
