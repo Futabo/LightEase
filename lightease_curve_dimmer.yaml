@@ -10,7 +10,7 @@ blueprint:
         text: {}
     input_range_low:
       name: Input Range Low
-      description: "Lowest input value from the dimmer (default: 2)"
+      description: "Lowest input value from the dimmer"
       default: 2
       selector:
         number:
@@ -21,7 +21,7 @@ blueprint:
           mode: box
     input_range_high:
       name: Input Range High
-      description: "Highest input value from the dimmer (default: 255)"
+      description: "Highest input value from the dimmer"
       default: 255
       selector:
         number:
