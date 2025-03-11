@@ -1,97 +1,59 @@
 blueprint:
-  name: Bézier Dimmer Light Control
-  description: Adjusts lights using cubic Bézier curves based on dimmer input
+  name: Lutron Dimmer - Cubic Bezier Light Control
+  description: Adjust lights using cubic Bézier curves based on Lutron dimmer input
   domain: automation
   input:
     dimmer_event:
       name: Dimmer Event
-      description: Select the dimmer event
+      description: ZHA event unique_id for the dimmer
       selector:
-        event:
-          platform: zha
-    input_min:
-      name: Input Min
-      description: Minimum input value from the dimmer
+        text: {}
+    input_range_low:
+      name: Input Range Low
+      description: Lowest input value from the dimmer (default: 2)
       default: 2
       selector:
         number:
           min: 0
           max: 255
           step: 1
-          unit_of_measurement: ""
-    input_max:
-      name: Input Max
-      description: Maximum input value from the dimmer
+          mode: box
+    input_range_high:
+      name: Input Range High
+      description: Highest input value from the dimmer (default: 255)
       default: 255
       selector:
         number:
           min: 0
           max: 255
           step: 1
-          unit_of_measurement: ""
-    output_min:
-      name: Output Min
-      description: Minimum output brightness percentage
-      default: 0
-      selector:
-        number:
-          min: 0
-          max: 100
-          step: 1
-          unit_of_measurement: "%"
-    output_max:
-      name: Output Max
-      description: Maximum output brightness percentage
-      default: 100
-      selector:
-        number:
-          min: 0
-          max: 100
-          step: 1
-          unit_of_measurement: "%"
+          mode: box
     bezier_curves:
       name: Bézier Curves
-      description: Define cubic Bézier curves for each light
+      description: Bézier curves for each light
+      default: []
       selector:
-        object:
-          multiple: true
-          default:
-            - entity_id: light.kitchen_cabinet_bottom
-              bezier:
-                - 0.7
-                - 0.07
-                - 0.5
-                - 0.85
-            - entity_id: light.kitchen_cabinets_top
-              bezier:
-                - 0.2
-                - 0.2
-                - 0.1
-                - 1
-            - entity_id: light.kitchen_globe
-              bezier:
-                - 1
-                - 0.01
-                - 0.85
-                - 0.46
+        object: {}
 
-mode: restart
+mode: queued
+max: 20
 
 trigger:
   - platform: event
     event_type: zha_event
     event_data:
-      device_ieee: !input dimmer_event
+      unique_id: !input dimmer_event
+
+variables:
+  t: >-
+    {{
+      ((trigger.event.data.params.level | float - input_range_low) /
+      (input_range_high - input_range_low))
+      | max(0) | min(1)
+    }}
+  bezier_curves: !input bezier_curves
 
 action:
-  - variables:
-      input_min: !input input_min
-      input_max: !input input_max
-      output_min: !input output_min
-      output_max: !input output_max
-      t: "{{ (trigger.event.data.params.level | float - input_min) / (input_max - input_min) }}"
-      bezier_curves: !input bezier_curves
-
   - repeat:
       for_each: "{{ bezier_curves }}"
       sequence:
@@ -102,15 +64,14 @@ action:
             p1y: "{{ repeat.item.bezier[1] }}"
             p2x: "{{ repeat.item.bezier[2] }}"
             p2y: "{{ repeat.item.bezier[3] }}"
-            bezier_value: |-
+            bezier_value: >-
               {{
                 ((1 - t) ** 3 * p0) +
                 (3 * (1 - t) ** 2 * t * p1y) +
                 (3 * (1 - t) * t ** 2 * p2y) +
                 (t ** 3 * p3)
               }}
-            brightness: "{{ ((bezier_value * (output_max - output_min)) + output_min) | int }}"
-
+            brightness: "{{ (bezier_value * 100) | int }}"
         - service: light.turn_on
           target:
             entity_id: "{{ repeat.item.entity_id }}"
@@ -119,8 +80,7 @@ action:
 
   - service: logbook.log
     data:
-      name: Bézier Dimmer Automation
+      name: Lutron Dimmer Automation
       message: >-
-        Input: {{ trigger.event.data.params.level }},
-        Normalized: {{ t }},
-        Brightness: {{ brightness }}
+        Lutron brightness {{ trigger.event.data.params.level }} → Normalized {{ t }} →
+        Adjusted lights
