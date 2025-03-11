@@ -1,121 +1,126 @@
 blueprint:
-  name: LightEase - Bezier Curve Control
-  description: "Control dimmable lights using a Bezier curve with a dimmer input."
+  name: Bézier Dimmer Light Control
+  description: Adjusts lights using cubic Bézier curves based on dimmer input
   domain: automation
   input:
-    control_device:
-      name: Control Device
-      description: "The dimmer input device."
+    dimmer_event:
+      name: Dimmer Event
+      description: Select the dimmer event
       selector:
-        entity:
-          domain: input_number
-
-    controlled_lights:
-      name: Lights to Control
-      description: Select the lights to adjust based on the Bezier curve.
+        event:
+          platform: zha
+    input_min:
+      name: Input Min
+      description: Minimum input value from the dimmer
+      default: 2
       selector:
-        entity:
-          domain: light
+        number:
+          min: 0
+          max: 255
+          step: 1
+          unit_of_measurement: ""
+    input_max:
+      name: Input Max
+      description: Maximum input value from the dimmer
+      default: 255
+      selector:
+        number:
+          min: 0
+          max: 255
+          step: 1
+          unit_of_measurement: ""
+    output_min:
+      name: Output Min
+      description: Minimum output brightness percentage
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+    output_max:
+      name: Output Max
+      description: Maximum output brightness percentage
+      default: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+    bezier_curves:
+      name: Bézier Curves
+      description: Define cubic Bézier curves for each light
+      selector:
+        object:
           multiple: true
-
-    bezier_preset:
-      name: Bezier Curve Preset
-      description: Select a preset curve or choose "Custom" to define your own.
-      selector:
-        select:
-          options:
-            - "Ease In"
-            - "Ease Out"
-            - "Ease In-Out"
-            - "Linear"
-            - "Custom"
-
-    bezier_x1:
-      name: Bezier X1 (Control Point 1)
-      description: Adjust the X1 value (0-1).
-      selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.01
-          mode: slider
-
-    bezier_y1:
-      name: Bezier Y1 (Control Point 1)
-      description: Adjust the Y1 value (0-1).
-      selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.01
-          mode: slider
-
-    bezier_x2:
-      name: Bezier X2 (Control Point 2)
-      description: Adjust the X2 value (0-1).
-      selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.01
-          mode: slider
-
-    bezier_y2:
-      name: Bezier Y2 (Control Point 2)
-      description: Adjust the Y2 value (0-1).
-      selector:
-        number:
-          min: 0
-          max: 1
-          step: 0.01
-          mode: slider
-
-    custom_bezier:
-      name: Custom Bezier Curve (Advanced)
-      description: Enter a custom bezier curve in the format [x1, y1, x2, y2].
-      default: "[0.42, 0, 0.58, 1]"
-      selector:
-        text:
-          multiline: false
+          default:
+            - entity_id: light.kitchen_cabinet_bottom
+              bezier:
+                - 0.7
+                - 0.07
+                - 0.5
+                - 0.85
+            - entity_id: light.kitchen_cabinets_top
+              bezier:
+                - 0.2
+                - 0.2
+                - 0.1
+                - 1
+            - entity_id: light.kitchen_globe
+              bezier:
+                - 1
+                - 0.01
+                - 0.85
+                - 0.46
 
 mode: restart
-max_exceeded: silent
 
 trigger:
-  - platform: state
-    entity_id: !input control_device
+  - platform: event
+    event_type: zha_event
+    event_data:
+      device_ieee: !input dimmer_event
 
 action:
   - variables:
-      brightness_input: "{{ states[trigger.entity_id].state | float(0) }}"
-      bezier_values: >
-        {% if is_state('input_bezier_preset', 'Ease In') %}
-          [0.42, 0, 1, 1]
-        {% elif is_state('input_bezier_preset', 'Ease Out') %}
-          [0, 0, 0.58, 1]
-        {% elif is_state('input_bezier_preset', 'Ease In-Out') %}
-          [0.42, 0, 0.58, 1]
-        {% elif is_state('input_bezier_preset', 'Linear') %}
-          [0, 0, 1, 1]
-        {% else %}
-          {{ input_custom_bezier | from_json }}
-        {% endif %}
-      x1: "{{ bezier_values[0] | float(0) }}"
-      y1: "{{ bezier_values[1] | float(0) }}"
-      x2: "{{ bezier_values[2] | float(0) }}"
-      y2: "{{ bezier_values[3] | float(0) }}"
+      input_min: !input input_min
+      input_max: !input input_max
+      output_min: !input output_min
+      output_max: !input output_max
+      t: "{{ (trigger.event.data.params.level | float - input_min) / (input_max - input_min) }}"
+      bezier_curves: !input bezier_curves
+
+  - repeat:
+      for_each: "{{ bezier_curves }}"
+      sequence:
+        - variables:
+            p0: 0
+            p3: 1
+            p1x: "{{ repeat.item.bezier[0] }}"
+            p1y: "{{ repeat.item.bezier[1] }}"
+            p2x: "{{ repeat.item.bezier[2] }}"
+            p2y: "{{ repeat.item.bezier[3] }}"
+            bezier_value: |-
+              {{
+                ((1 - t) ** 3 * p0) +
+                (3 * (1 - t) ** 2 * t * p1y) +
+                (3 * (1 - t) * t ** 2 * p2y) +
+                (t ** 3 * p3)
+              }}
+            brightness: "{{ ((bezier_value * (output_max - output_min)) + output_min) | int }}"
+
+        - service: light.turn_on
+          target:
+            entity_id: "{{ repeat.item.entity_id }}"
+          data:
+            brightness_pct: "{{ brightness }}"
 
   - service: logbook.log
     data:
-      name: "Bezier Curve Debug"
-      message: "Bezier applied with control points [{{ x1 }}, {{ y1 }}, {{ x2 }}, {{ y2 }}] and input brightness {{ brightness_input }}."
-
-  - repeat:
-      for_each: !input controlled_lights
-      sequence:
-        - service: light.turn_on
-          target:
-            entity_id: "{{ repeat.item }}"
-          data:
-            brightness_pct: >
-              {{ ((1 - ((1 - brightness_input / 100) ** 3)) * 100) | int }}
+      name: Bézier Dimmer Automation
+      message: >-
+        Input: {{ trigger.event.data.params.level }},
+        Normalized: {{ t }},
+        Brightness: {{ brightness }}
