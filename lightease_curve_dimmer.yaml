@@ -10,27 +10,29 @@ blueprint:
         text: {}
     input_range_low:
       name: Input Range Low
-      description: Lowest input value from the dimmer (default: 2)
+      description: "Lowest input value from the dimmer (default: 2)"
       default: 2
       selector:
         number:
           min: 0
           max: 255
           step: 1
+          unit_of_measurement: ''
           mode: box
     input_range_high:
       name: Input Range High
-      description: Highest input value from the dimmer (default: 255)
+      description: "Highest input value from the dimmer (default: 255)"
       default: 255
       selector:
         number:
           min: 0
           max: 255
           step: 1
+          unit_of_measurement: ''
           mode: box
     bezier_curves:
       name: Bézier Curves
-      description: Bézier curves for each light
+      description: "Bézier curves for each light"
       default: []
       selector:
         object: {}
